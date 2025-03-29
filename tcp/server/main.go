@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"time"
 )
 
 type TcpServer struct{}
@@ -42,7 +41,18 @@ func (ts *TcpServer) read(conn net.Conn) {
 	// adding defer conn.Close() in the server ensures
 	// proper resource cleanup, and calling conn.Close()
 	// on an already closed connection won't cause any errors in Go.
-	defer conn.Close()
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			log.Printf("Closing connection error: %v", err)
+		}
+
+		fmt.Printf("Closed connection to %s\n", conn.RemoteAddr().String())
+	}()
+
+	fmt.Printf("Serving %s\n", conn.RemoteAddr().String())
+
+	var totalBytesReceivedCount int
 
 	// Create a buffer of 2048 bytes to hold
 	// incoming data from the connection
@@ -56,8 +66,8 @@ func (ts *TcpServer) read(conn net.Conn) {
 		if err != nil {
 			if err == io.EOF {
 				// Client has closed the connection
-				fmt.Println("Client closed the connection.")
-				return
+				fmt.Println("EOF Reached.")
+				break
 			}
 			// If an error occurs (e.g., connection closed
 			// or read issue), log the error and return
@@ -73,49 +83,22 @@ func (ts *TcpServer) read(conn net.Conn) {
 		// `n` is within the bounds of the buffer (which it is).
 		data := buf[:n]
 
-		// process data...
+		// process data from client...
 		fmt.Println(string(data))
+
+		totalBytesReceivedCount += n
 	}
-}
 
-func makeRequest() error {
-	data := []byte(strings.Repeat("Hi", 5))
-
-	conn, err := net.Dial("tcp", ":3000")
+	// send response back to client
+	response := fmt.Sprintf("Hi from server! Received %d bytes! %s", totalBytesReceivedCount, strings.Repeat("foo", 1000))
+	_, err := conn.Write([]byte(response))
 	if err != nil {
-		return fmt.Errorf("Failed to connect to server: %w", err)
+		log.Printf("Error sending response: %v", err)
+		return
 	}
-	defer conn.Close()
-
-	// When using conn.Write(data), the data is written to an
-	// internal buffer, and if the buffer is full, the write
-	// operation will block until the operating system has
-	// transmitted enough data over the network to free up space.
-	// Once space becomes available in the buffer, more data
-	// can be written to the buffer, and this process continues until
-	// all the data is sent. The data is sent in chunks over a single
-	// connection, with the operating system managing the flow and
-	// buffering of the data without creating multiple network requests.
-	n, err := conn.Write(data)
-	if err != nil {
-		return fmt.Errorf("Failed to send data: %w", err)
-	}
-
-	fmt.Printf("Wrote %d bytes over the network\n", n)
-
-	return nil
 }
 
 func main() {
-	go func() {
-		time.Sleep(2 * time.Second)
-
-		err := makeRequest()
-		if err != nil {
-			log.Printf("Client error: %v", err)
-		}
-	}()
-
 	ts := &TcpServer{}
 	ts.Start()
 }
