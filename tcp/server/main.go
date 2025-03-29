@@ -52,8 +52,6 @@ func (ts *TcpServer) read(conn net.Conn) {
 
 	fmt.Printf("Serving %s\n", conn.RemoteAddr().String())
 
-	var totalBytesReceivedCount int
-
 	// Create a buffer of 2048 bytes to hold
 	// incoming data from the connection
 	buf := make([]byte, 2048)
@@ -85,12 +83,10 @@ func (ts *TcpServer) read(conn net.Conn) {
 
 		// process data from client...
 		fmt.Println(string(data))
-
-		totalBytesReceivedCount += n
 	}
 
 	// send response back to client
-	response := fmt.Sprintf("Hi from server! Received %d bytes! %s", totalBytesReceivedCount, strings.Repeat("foo", 1000))
+	response := fmt.Sprintf("Hi from server! %s", strings.Repeat("foo", 1000))
 	_, err := conn.Write([]byte(response))
 	if err != nil {
 		log.Printf("Error sending response: %v", err)
