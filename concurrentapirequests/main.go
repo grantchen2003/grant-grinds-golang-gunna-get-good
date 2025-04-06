@@ -65,8 +65,8 @@ func main() {
 		"http://example.3",
 	}
 
-	wg.Add(len(urls))
 	for _, url := range urls {
+		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
 			apiChannel <- makeApiRequest(url)
@@ -75,18 +75,22 @@ func main() {
 
 	// wg.Wait() must be called in a separate goroutine to
 	// prevent a deadlock. Writing to a channel is blocking
-	// until the receiver reads from it. So if wg.Wait() is
-	// called directly, the main goroutine waits for all
-	// API requests to finish, but the API goroutines are
-	// blocked, waiting for the main goroutine to read from
-	// the channel. This causes a circular dependency since
-	// the main goroutine can't start receiving data until
-	// wg.Wait() completes, but the API goroutines can't
-	// send data until the receiver is ready which is after
-	// wg.Wait() completes. By calling wg.Wait() asynchronously,
-	// we allow the main goroutine to start receiving data from
-	// the channel while the API requests are still running,
-	// avoiding the deadlock.
+	// until the receiver reads from it.
+	//
+	// Suppose wg.Wait() is called directly in the main goroutine
+	// and not in a seperate goroutine. The main goroutine waits
+	// for all API goroutines to finish. But the API goroutines are
+	// blocked, waiting for the main goroutine to read from the
+	// channel, and thus unable to run wg.Done(). This causes a
+	// circular dependency since the main goroutine can't start
+	// receiving data until wg.Wait() completes, but the API
+	// goroutines can't signal that it is done via wg.Done() until
+	// the main goroutine receives the data.
+	//
+	// By calling wg.Wait() asynchronously in a seperate goroutine,
+	// we allow the main goroutine to start receiving data from the
+	// channel while the API requests are still running, avoiding
+	// the deadlock.
 	go func() {
 		wg.Wait()
 		// we close here knowing all the goroutines are done
